@@ -88,7 +88,7 @@ def launch_ssh(q):
     },
 )
 def run(dataset: str) -> None:
-    subprocess.run(["run.sh", dataset])
+    subprocess.run(["sh", "run.sh", dataset])
 
 
 @app.local_entrypoint()
