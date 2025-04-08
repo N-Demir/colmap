@@ -1,3 +1,5 @@
+*.json
+
 # Custom files
 LocalConfig.cmake
 src/colmap/util/version.cc
