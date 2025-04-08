@@ -26,9 +26,15 @@ app = modal.App(
     )
     # VSCode
     .run_commands("curl -fsSL https://code-server.dev/install.sh | sh")
-    .add_local_dir(".", "/root/colmap")
-    # Install gcloud
-    .add_local_file("gcs-tour-project-service-account-key.json", "/root/gcs-tour-project-service-account-key.json")
+    # GCloud
+    .run_commands("apt-get update && apt-get install -y curl gnupg && \
+    curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg && \
+    echo 'deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main' | tee -a /etc/apt/sources.list.d/google-cloud-sdk.list && \
+    apt-get update && apt-get install -y \
+    google-cloud-cli \
+    && rm -rf /var/lib/apt/lists/*"
+    )
+    .add_local_file("gcs-tour-project-service-account-key.json", "/root/gcs-tour-project-service-account-key.json", copy=True)
     .run_commands(
         "gcloud auth activate-service-account --key-file=/root/gcs-tour-project-service-account-key.json",
         "gcloud config set project tour-project-442218",
@@ -36,6 +42,8 @@ app = modal.App(
     )
     .env({"GOOGLE_APPLICATION_CREDENTIALS": "/root/gcs-tour-project-service-account-key.json"})
     .run_commands("gcloud storage ls")
+    # Add the source code so if we need to debug we can look at it on the server
+    .add_local_dir(".", "/root/")
 )
 
 
@@ -60,7 +68,7 @@ def wait_for_port(host, port, q):
     gpu="T4",
     secrets=[modal.Secret.from_name("wandb-secret")],
     volumes={
-        "/root/gsplat/data": modal.Volume.from_name("data", create_if_missing=True),
+        "/root/data": modal.Volume.from_name("data", create_if_missing=True),
     },
 )
 def launch_ssh(q):
@@ -70,30 +78,46 @@ def launch_ssh(q):
 
         subprocess.run(["/usr/sbin/sshd", "-D"])  # TODO: I don't know why I need to start this here
 
+
+@app.function(
+    timeout=3600 * 24,
+    gpu="T4",
+    secrets=[modal.Secret.from_name("wandb-secret")],
+    volumes={
+        "/root/data": modal.Volume.from_name("data", create_if_missing=True),
+    },
+)
+def run(dataset: str) -> None:
+    subprocess.run(["run.sh", dataset])
+
+
 @app.local_entrypoint()
-def main():
-    import sshtunnel
+def main(dataset: str | None = None, server: bool = False):
+    if server:
+        import sshtunnel
 
-    with modal.Queue.ephemeral() as q:
-        launch_ssh.spawn(q)
-        host, port = q.get()
-        print(f"SSH server running at {host}:{port}")
+        with modal.Queue.ephemeral() as q:
+            launch_ssh.spawn(q)
+            host, port = q.get()
+            print(f"SSH server running at {host}:{port}")
 
-        server = sshtunnel.SSHTunnelForwarder(
-            (host, port),
-            ssh_username="root",
-            ssh_password=" ",
-            remote_bind_address=("127.0.0.1", 22),
-            local_bind_address=("127.0.0.1", LOCAL_PORT),
-            allow_agent=False,
-        )
+            server = sshtunnel.SSHTunnelForwarder(
+                (host, port),
+                ssh_username="root",
+                ssh_password=" ",
+                remote_bind_address=("127.0.0.1", 22),
+                local_bind_address=("127.0.0.1", LOCAL_PORT),
+                allow_agent=False,
+            )
 
-        try:
-            server.start()
-            print(f"SSH tunnel forwarded to localhost:{server.local_bind_port}")
-            while True:
-                time.sleep(1)
-        except KeyboardInterrupt:
-            print("\nShutting down SSH tunnel...")
-        finally:
-            server.stop()
+            try:
+                server.start()
+                print(f"SSH tunnel forwarded to localhost:{server.local_bind_port}")
+                while True:
+                    time.sleep(1)
+            except KeyboardInterrupt:
+                print("\nShutting down SSH tunnel...")
+            finally:
+                server.stop()
+    elif dataset is not None:
+        run.remote(dataset)
