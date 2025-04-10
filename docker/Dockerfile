@@ -1,7 +1,7 @@
-FROM nvidia/cuda:11.7.0-devel-ubuntu22.04
+FROM nvidia/cuda:11.8.0-devel-ubuntu22.04
 
 ARG COLMAP_VERSION=dev
-ARG CUDA_ARCHITECTURES=native
+ARG CUDA_ARCHITECTURES=75
 
 # Prevent stop building ubuntu at time zone selection.  
 ENV DEBIAN_FRONTEND=noninteractive
