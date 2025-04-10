@@ -1,3 +1,4 @@
+*.json
 # Custom files
 LocalConfig.cmake
 src/util/version.h
