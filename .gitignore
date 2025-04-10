@@ -1,4 +1,19 @@
+.lesshst
+.bashrc
+.cache/
+.config/
+.cursor-server/
+.local/
+.ssh/
+.vim/
+.viminfo
+.vscode/
+.profile
+colmap_output/
+data/
+*.bin
 *.json
+
 # Custom files
 LocalConfig.cmake
 src/util/version.h
